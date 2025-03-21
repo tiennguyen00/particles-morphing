@@ -2,7 +2,6 @@ import { useGLTF, useTexture } from "@react-three/drei";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useWindowSize } from "@/utils/useScreen";
 import {
   GPUComputationRenderer,
   Variable,
@@ -20,19 +19,18 @@ import { lerp } from "three/src/math/MathUtils.js";
 // Constants moved outside component for better performance
 const SIZE = 256;
 const NUMBER = SIZE * SIZE;
-const PARTICLE_SIZE = 0.01;
+const PARTICLE_SIZE = 0.012;
 const DUMMY_INDICATOR_POSITION = new THREE.Vector3(0, 99, 0);
 const ZERO_VECTOR = new THREE.Vector3(0, 0, 0);
 // ================================
 
 const Experience = () => {
-  const { camera, pointer, gl } = useThree();
+  const { gl } = useThree();
   const matcap = useTexture("/img/matcap.png");
   const [ready, setReady] = useState(false);
 
   // Create refs for the meshes we'll create declaratively
   const meshRef = useRef<THREE.InstancedMesh>(null);
-  const raycasterMeshRef = useRef<THREE.Mesh>(null);
 
   const sampler = useRef<MeshSurfaceSampler>(null!);
   const gpuCompute = useRef<GPUComputationRenderer>(null!);
@@ -45,8 +43,6 @@ const Experience = () => {
     [uniform: string]: THREE.IUniform<any>;
   } | null>(null);
 
-  const { width, height } = useWindowSize();
-  const raycaster = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const shaderMaterial = useRef<THREE.ShaderMaterial>(null!);
   const sceneFBO = useRef<THREE.Scene>(new THREE.Scene());
   const cameraFBO = useRef<THREE.OrthographicCamera>(
@@ -208,7 +204,7 @@ const Experience = () => {
   useFrame(({ clock }) => {
     if (
       !gpuCompute.current ||
-      !shaderMaterial.current ||
+      !meshRef.current?.material ||
       !meshRef.current ||
       !ready
     )
@@ -225,13 +221,13 @@ const Experience = () => {
 
     // Update shader uniforms with computed textures
     if (velocityVariable.current) {
-      shaderMaterial.current.uniforms.uVelocity.value =
+      meshRef.current.material.uniforms.uVelocity.value =
         gpuCompute.current.getCurrentRenderTarget(
           velocityVariable.current
         ).texture;
     }
     if (positionVariable.current) {
-      shaderMaterial.current.uniforms.uTexture.value =
+      meshRef.current.material.uniforms.uTexture.value =
         gpuCompute.current.getCurrentRenderTarget(
           positionVariable.current
         ).texture;
@@ -262,19 +258,10 @@ const Experience = () => {
     sampler.current.build();
 
     // Building Instanced Mesh with physics - we'll use this imperatively for performance
-    shaderMaterial.current = new THREE.ShaderMaterial({
-      uniforms: {
-        uTexture: { value: setUpFBO?.positions },
-        time: { value: 0 },
-        uVelocity: { value: null },
-        uMatcap: { value: matcap },
-      },
-      vertexShader: vertexInstance,
-      fragmentShader: fragmentShader,
-    });
+
+    console.log("meshrefcurrent", meshRef.current.material);
 
     // Apply the shader material to the instanced mesh
-    meshRef.current.material = shaderMaterial.current;
 
     setReady(true);
   }, [meshModel, setUpFBO, matcap]);
@@ -290,7 +277,7 @@ const Experience = () => {
       // Dispose all Three.js resources on unmount
       if (planeGeometry) planeGeometry.dispose();
       if (simMaterial.current) simMaterial.current.dispose();
-      if (shaderMaterial.current) shaderMaterial.current.dispose();
+      if (meshRef.current?.material) meshRef.current?.material.dispose();
       if (sceneFBO.current) {
         sceneFBO.current.children.forEach((child) => {
           if (child instanceof THREE.Mesh) {
@@ -314,12 +301,23 @@ const Experience = () => {
             args={[uvInstance, 2]}
           />
         </boxGeometry>
+        {ready && !!setUpFBO?.positions && (
+          <shaderMaterial
+            uniforms={{
+              uTexture: { value: setUpFBO?.positions },
+              time: { value: 0 },
+              uVelocity: { value: null },
+              uMatcap: { value: matcap },
+            }}
+            vertexShader={vertexInstance}
+            fragmentShader={fragmentShader}
+          />
+        )}
       </instancedMesh>
 
       {/* Invisible mesh for raycasting */}
       {meshModel && (
         <mesh
-          ref={raycasterMeshRef}
           visible={false}
           onPointerMove={(e) => {
             const point = e.point;
