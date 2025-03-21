@@ -1,5 +1,5 @@
-import { useFBO, useGLTF, useTexture } from "@react-three/drei";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useGLTF, useTexture } from "@react-three/drei";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useWindowSize } from "@/utils/useScreen";
@@ -21,15 +21,19 @@ import { lerp } from "three/src/math/MathUtils.js";
 const SIZE = 256;
 const NUMBER = SIZE * SIZE;
 const PARTICLE_SIZE = 0.01;
-const DUMMY_SPHERE_SIZE = 0.01;
-const DUMMY_SPHERE_SEGMENTS = 32;
 const DUMMY_INDICATOR_POSITION = new THREE.Vector3(0, 99, 0);
 const ZERO_VECTOR = new THREE.Vector3(0, 0, 0);
+// ================================
 
 const Experience = () => {
-  const { camera, pointer, scene, gl } = useThree();
-
+  const { camera, pointer, gl } = useThree();
   const matcap = useTexture("/img/matcap.png");
+  const [ready, setReady] = useState(false);
+
+  // Create refs for the meshes we'll create declaratively
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const raycasterMeshRef = useRef<THREE.Mesh>(null);
+
   const sampler = useRef<MeshSurfaceSampler>(null!);
   const gpuCompute = useRef<GPUComputationRenderer>(null!);
   const positionVariable = useRef<Variable | null>(null);
@@ -55,19 +59,18 @@ const Experience = () => {
 
   // Cached geometries to avoid recreating
   const planeGeometry = useMemo(() => new THREE.PlaneGeometry(2, 2, 2, 2), []);
-  const boxGeometry = useMemo(
-    () => new THREE.BoxGeometry(PARTICLE_SIZE, PARTICLE_SIZE, PARTICLE_SIZE),
-    []
-  );
-  const sphereGeometry = useMemo(
-    () =>
-      new THREE.SphereGeometry(
-        DUMMY_SPHERE_SIZE,
-        DUMMY_SPHERE_SEGMENTS,
-        DUMMY_SPHERE_SEGMENTS
-      ),
-    []
-  );
+
+  const uvInstance = useMemo(() => {
+    const result = new Float32Array(NUMBER * 2);
+    for (let i = 0; i < SIZE; i++) {
+      for (let j = 0; j < SIZE; j++) {
+        const index = i * SIZE + j;
+        result[2 * index] = j / (SIZE - 1);
+        result[2 * index + 1] = i / (SIZE - 1);
+      }
+    }
+    return result;
+  }, []);
 
   const getPointOnModel = useMemo(() => {
     if (!sampler.current) return;
@@ -202,10 +205,13 @@ const Experience = () => {
   }, [getPointOnModel, planeGeometry]);
 
   // More efficient animation frame handling
-  useFrame((state) => {
-    const { clock } = state;
-
-    if (!sampler.current || !gpuCompute.current || !shaderMaterial.current)
+  useFrame(({ clock }) => {
+    if (
+      !gpuCompute.current ||
+      !shaderMaterial.current ||
+      !meshRef.current ||
+      !ready
+    )
       return;
 
     // Run GPU computation
@@ -249,13 +255,13 @@ const Experience = () => {
 
   // Setup the sampler and instanced mesh
   useEffect(() => {
-    if (!meshModel) return;
+    if (!meshModel || !meshRef.current) return;
 
     // Initialize the sampler
     sampler.current = new MeshSurfaceSampler(meshModel as THREE.Mesh);
     sampler.current.build();
 
-    // Building Instanced Mesh with physics
+    // Building Instanced Mesh with physics - we'll use this imperatively for performance
     shaderMaterial.current = new THREE.ShaderMaterial({
       uniforms: {
         uTexture: { value: setUpFBO?.positions },
@@ -267,98 +273,24 @@ const Experience = () => {
       fragmentShader: fragmentShader,
     });
 
-    const mesh = new THREE.InstancedMesh(
-      boxGeometry,
-      shaderMaterial.current,
-      NUMBER
-    );
+    // Apply the shader material to the instanced mesh
+    meshRef.current.material = shaderMaterial.current;
 
-    // Create instance uv reference
-    const uvInstance = new Float32Array(NUMBER * 2);
-    for (let i = 0; i < SIZE; i++) {
-      for (let j = 0; j < SIZE; j++) {
-        const index = i * SIZE + j;
-        uvInstance[2 * index] = j / (SIZE - 1);
-        uvInstance[2 * index + 1] = i / (SIZE - 1);
-      }
-    }
-    boxGeometry.setAttribute(
-      "uvRef",
-      new THREE.InstancedBufferAttribute(uvInstance, 2)
-    );
-
-    scene.add(mesh);
-
-    // Cleanup function
-    return () => {
-      boxGeometry.dispose();
-      shaderMaterial.current.dispose();
-      mesh.dispose();
-      scene.remove(mesh);
-    };
-  }, [meshModel, setUpFBO, boxGeometry, matcap, scene]);
+    setReady(true);
+  }, [meshModel, setUpFBO, matcap]);
 
   // Initialize GPGPU when point data is ready
   useEffect(() => {
     if (getPointOnModel) initGPGPU();
   }, [getPointOnModel, initGPGPU]);
 
-  // Setup mouse interaction
-  useEffect(() => {
-    if (!meshModel || !(meshModel instanceof THREE.Mesh)) return;
-
-    const raycasterMesh = new THREE.Mesh(
-      meshModel.geometry.clone(),
-      new THREE.MeshBasicMaterial({ visible: false })
-    );
-    scene.add(raycasterMesh);
-
-    const handleMouseMove = (e: MouseEvent) => {
-      pointer.x = (e.clientX / width) * 2 - 1;
-      pointer.y = -(e.clientY / height) * 2 + 1;
-      raycaster.current.setFromCamera(pointer, camera);
-
-      const intersects = raycaster.current.intersectObjects([raycasterMesh]);
-
-      if (!simMaterial.current) return;
-
-      if (intersects.length > 0) {
-        const point = intersects[0].point;
-
-        // Update all mouse uniforms at once with the same value
-        simMaterial.current.uniforms.uMouse.value = point;
-        if (positionUniforms.current)
-          positionUniforms.current.uMouse.value = point;
-        if (velocityUniforms.current)
-          velocityUniforms.current.uMouse.value = point;
-      } else {
-        // Use a pre-defined vector for better performance
-        simMaterial.current.uniforms.uMouse.value = DUMMY_INDICATOR_POSITION;
-        if (positionUniforms.current)
-          positionUniforms.current.uMouse.value = DUMMY_INDICATOR_POSITION;
-        if (velocityUniforms.current)
-          velocityUniforms.current.uMouse.value = DUMMY_INDICATOR_POSITION;
-      }
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-
-    // Proper cleanup
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      scene.remove(raycasterMesh);
-      raycasterMesh.geometry.dispose();
-      (raycasterMesh.material as THREE.Material).dispose();
-    };
-  }, [camera, width, height, pointer, scene, meshModel, sphereGeometry]);
-
   // Cleanup on component unmount
   useEffect(() => {
     return () => {
       // Dispose all Three.js resources on unmount
       if (planeGeometry) planeGeometry.dispose();
-      if (sphereGeometry) sphereGeometry.dispose();
       if (simMaterial.current) simMaterial.current.dispose();
+      if (shaderMaterial.current) shaderMaterial.current.dispose();
       if (sceneFBO.current) {
         sceneFBO.current.children.forEach((child) => {
           if (child instanceof THREE.Mesh) {
@@ -370,9 +302,59 @@ const Experience = () => {
         });
       }
     };
-  }, [planeGeometry, sphereGeometry]);
+  }, [planeGeometry]);
 
-  return <></>;
+  return (
+    <>
+      {/* Main particle system */}
+      <instancedMesh ref={meshRef} args={[null, null, NUMBER]}>
+        <boxGeometry args={[PARTICLE_SIZE, PARTICLE_SIZE, PARTICLE_SIZE]}>
+          <instancedBufferAttribute
+            attach="attributes-uvRef"
+            args={[uvInstance, 2]}
+          />
+        </boxGeometry>
+      </instancedMesh>
+
+      {/* Invisible mesh for raycasting */}
+      {meshModel && (
+        <mesh
+          ref={raycasterMeshRef}
+          visible={false}
+          onPointerMove={(e) => {
+            const point = e.point;
+            if (simMaterial.current)
+              simMaterial.current.uniforms.uMouse.value = point;
+            if (positionUniforms.current)
+              positionUniforms.current.uMouse.value = point;
+            if (velocityUniforms.current)
+              velocityUniforms.current.uMouse.value = point;
+            e.stopPropagation();
+          }}
+          onPointerOut={() => {
+            if (simMaterial.current)
+              simMaterial.current.uniforms.uMouse.value =
+                DUMMY_INDICATOR_POSITION;
+            if (positionUniforms.current)
+              positionUniforms.current.uMouse.value = DUMMY_INDICATOR_POSITION;
+            if (velocityUniforms.current)
+              velocityUniforms.current.uMouse.value = DUMMY_INDICATOR_POSITION;
+          }}
+        >
+          <primitive object={meshModel.geometry.clone()} />
+        </mesh>
+      )}
+
+      {/* <CycleRaycast
+        onChanged={(objects, cycle) => {
+          if (objects.length) {
+            const point = objects[0].point;
+            console.log("point: ", point);
+          }
+        }}
+      /> */}
+    </>
+  );
 };
 
 export default Experience;
