@@ -5,14 +5,18 @@ import Experience from "@/components/Experience";
 import { OrbitControls, StatsGl } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import Link from "next/link";
-import Image from "next/image";
 
 export default function Home() {
   return (
     <div className="w-[100dvw] min-h-[100dvh]">
       <div className="fixed z-[999] bottom-6 right-6 ">
         <Link href="https://github.com/tiennguyen00" target="_blank">
-          <Image src="/img/github.png" alt="about" width={32} height={32} />
+          <img
+            src="/img/github.png"
+            alt="about"
+            width={"32px"}
+            height={"32px"}
+          />
         </Link>
       </div>
       <Canvas
