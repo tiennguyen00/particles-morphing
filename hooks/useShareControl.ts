@@ -1,8 +1,9 @@
 import { useControls } from "leva";
 import { folder } from "leva";
+import { useEffect, useState } from "react";
 
 export const useShareControl = () => {
-  const { QUANTITY, SIZE } = useControls({
+  const { QUANTITY: levaQuantity, SIZE } = useControls({
     points: folder({
       QUANTITY: {
         options: {
@@ -21,6 +22,17 @@ export const useShareControl = () => {
       },
     }),
   });
+
+  // Debounce QUANTITY changes to avoid rapid recreations
+  const [QUANTITY, setQUANTITY] = useState(levaQuantity);
+
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      setQUANTITY(levaQuantity);
+    }, 300); // 300ms debounce delay
+
+    return () => clearTimeout(debounceTimer);
+  }, [levaQuantity]);
 
   return { QUANTITY, SIZE, NUMBER: QUANTITY * QUANTITY };
 };
