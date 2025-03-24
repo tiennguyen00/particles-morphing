@@ -126,8 +126,8 @@ void main() {
     // particle attraction to shape force
     vec3 direction = normalize( original - position );
     float dist = length( original - position );
-    if( dist > uScope ) {
-        velocity += direction * uShapeForce;
+    if( dist > 0.1 ) {
+        velocity += direction * 0.001;
     }
     
     // mouse repel force
