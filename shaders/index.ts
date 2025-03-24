@@ -20,7 +20,9 @@ vec3 rotate3D(vec3 v, vec3 vel) {
 
 void main() {
     vUv = uv;
+    // uTexture as the DataTexture (-0.5 -> 0.5)
     vec4 color = texture2D( uTexture, uvRef );
+    // uVelocity using gpuCompute tech (FBO)
     vec4 velocity = texture2D( uVelocity, uvRef );
     vec3 newpos = color.xyz;
 
@@ -100,10 +102,14 @@ void main() {
 
 export const simFragmentVelocity = `
 uniform float uProgress;
-// uniform sampler2D uCurrentPosition;
 uniform sampler2D uOriginalPosition;
 uniform vec3 uMouse;
 uniform float uTime;
+uniform float uFiction;
+uniform float uScope;
+uniform float uShapeForce;
+uniform float uMouseRepelForce;
+
 float rand(vec2 co){
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
 }
@@ -114,24 +120,22 @@ void main() {
     vec3 original = texture2D( uOriginalPosition, vUv ).xyz;
     vec3 velocity = texture2D( uCurrentVelocity, vUv ).xyz;
 
-    velocity *= 0.9;
+    // Apply fiction (friction) to slow down particles
+    velocity *= uFiction;
 
     // particle attraction to shape force
     vec3 direction = normalize( original - position );
     float dist = length( original - position );
-    if( dist > 0.1 ) {
-        velocity += direction  * 0.001;
+    if( dist > uScope ) {
+        velocity += direction * uShapeForce;
     }
     
-
-
-
     // mouse repel force
     float mouseDistance = distance( position, uMouse );
     float maxDistance = 0.25;
     if( mouseDistance < maxDistance ) {
         vec3 direction = normalize( position - uMouse );
-        velocity += direction * ( 1.0 - mouseDistance / maxDistance ) * 0.01;
+        velocity += direction * ( 1.0 - mouseDistance / maxDistance ) * uMouseRepelForce;
     }
 
 
@@ -143,11 +147,7 @@ void main() {
     //     position.xyz = finalOriginal;
     // }
 
-
-
     // position.xy += velocity;
-
-    
     gl_FragColor = vec4(velocity, 1.);
 }
 `;

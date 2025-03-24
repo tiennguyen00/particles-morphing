@@ -3,7 +3,14 @@ import { folder } from "leva";
 import { useEffect, useState } from "react";
 
 export const useShareControl = () => {
-  const { QUANTITY: levaQuantity, SIZE } = useControls({
+  const {
+    QUANTITY: levaQuantity,
+    SIZE,
+    FICTION,
+    SCOPE,
+    SHAPE_FORCE,
+    MOUSE_REPEL_FORCE,
+  } = useControls({
     points: folder({
       QUANTITY: {
         options: {
@@ -21,6 +28,36 @@ export const useShareControl = () => {
         step: 0.001,
       },
     }),
+    velocities: folder({
+      FICTION: {
+        min: 0.1,
+        max: 1,
+        value: 0.9,
+        step: 0.1,
+      },
+      SCOPE: {
+        min: 0.1,
+        value: 0.1,
+        step: 0.1,
+        max: 0.5,
+        disabled: true,
+      },
+      SHAPE_FORCE: {
+        min: 0.001,
+        value: 0.001,
+        step: 0.001,
+        max: 0.01,
+        disabled: true,
+      },
+    }),
+    mouse: folder({
+      MOUSE_REPEL_FORCE: {
+        min: 0.001,
+        value: 0.01,
+        step: 0.01,
+        max: 0.1,
+      },
+    }),
   });
 
   // Debounce QUANTITY changes to avoid rapid recreations
@@ -34,5 +71,13 @@ export const useShareControl = () => {
     return () => clearTimeout(debounceTimer);
   }, [levaQuantity]);
 
-  return { QUANTITY, SIZE, NUMBER: QUANTITY * QUANTITY };
+  return {
+    QUANTITY,
+    SIZE,
+    NUMBER: QUANTITY * QUANTITY,
+    FICTION,
+    SCOPE,
+    SHAPE_FORCE,
+    MOUSE_REPEL_FORCE,
+  };
 };

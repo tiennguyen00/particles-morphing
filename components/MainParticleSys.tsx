@@ -22,7 +22,7 @@ const MainParticleSys = ({ meshRef, fboDataTexture }: MainParticleSysProps) => {
       return uvCache.get(QUANTITY);
     }
 
-    // Generate new UV data if not cached
+    // Generate new UV data if not cached | 0 -> 1 value
     const result = new Float32Array(NUMBER * 2);
     for (let i = 0; i < QUANTITY; i++) {
       for (let j = 0; j < QUANTITY; j++) {
@@ -31,7 +31,6 @@ const MainParticleSys = ({ meshRef, fboDataTexture }: MainParticleSysProps) => {
         result[2 * index + 1] = i / (QUANTITY - 1);
       }
     }
-    // Store in cache
     uvCache.set(QUANTITY, result);
     return result;
   }, [QUANTITY]);

@@ -24,7 +24,8 @@ const planeGeometry = new THREE.PlaneGeometry(2, 2, 2, 2);
 const Experience = () => {
   const { gl } = useThree();
   const [ready, setReady] = useState(false);
-  const { QUANTITY, NUMBER } = useShareControl();
+  const { QUANTITY, NUMBER, FICTION, SCOPE, SHAPE_FORCE, MOUSE_REPEL_FORCE } =
+    useShareControl();
 
   // Cache for model points at different resolutions
   const pointsCache = useRef<Map<number, THREE.DataTexture>>(new Map());
@@ -150,13 +151,16 @@ const Experience = () => {
     velocityUniforms.current!.uTime = { value: 0 };
     velocityUniforms.current!.uMouse = { value: ZERO_VECTOR.clone() };
     velocityUniforms.current!.uOriginalPosition = { value: pointOnModel };
+    velocityUniforms.current!.uFiction = { value: FICTION };
+    velocityUniforms.current!.uScope = { value: SCOPE };
+    velocityUniforms.current!.uShapeForce = { value: SHAPE_FORCE };
+    velocityUniforms.current!.uMouseRepelForce = { value: MOUSE_REPEL_FORCE };
 
     gpuCompute.current.init();
   };
 
   // This return the DataTexture for FBO
   const setUpFBO = () => {
-    console.log("setUpFBO: ", QUANTITY);
     const data = new Float32Array(4 * NUMBER);
     for (let i = 0; i < QUANTITY; i++) {
       for (let j = 0; j < QUANTITY; j++) {
@@ -233,6 +237,10 @@ const Experience = () => {
     }
     if (velocityUniforms.current) {
       velocityUniforms.current.uTime.value = elapsedTime;
+      velocityUniforms.current.uFiction.value = FICTION;
+      velocityUniforms.current.uScope.value = SCOPE;
+      velocityUniforms.current.uShapeForce.value = SHAPE_FORCE;
+      velocityUniforms.current.uMouseRepelForce.value = MOUSE_REPEL_FORCE;
     }
 
     // Update shader uniforms with computed textures
