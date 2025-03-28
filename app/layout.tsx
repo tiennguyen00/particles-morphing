@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Link from "next/link";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,7 +28,19 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <div className="w-[100dvw] min-h-[100dvh]">
+          <div className="fixed z-[999] bottom-6 right-6 ">
+            <Link href="https://github.com/tiennguyen00" target="_blank">
+              <img
+                src="/img/github.png"
+                alt="about"
+                width={"32px"}
+                height={"32px"}
+              />
+            </Link>
+          </div>
+          {children}
+        </div>
       </body>
     </html>
   );

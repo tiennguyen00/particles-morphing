@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 "use client";
-import Experience from "@/components/Experience";
+import Experience from "@/components/Experience2";
 import { OrbitControls, StatsGl } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 
