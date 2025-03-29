@@ -15,6 +15,7 @@ export default function Home() {
         antialias: true,
       }}
     >
+      <axesHelper />
       <color attach="background" args={["#222"]} />
       <StatsGl className="top-0 left-0 fixed" trackGPU />
       <OrbitControls />

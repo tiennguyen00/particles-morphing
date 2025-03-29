@@ -1,15 +1,3 @@
-export const simVertex = `
-varying vec2 vUv;
-uniform float time;
-void main() {
-    vUv = uv;
-    vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
-    gl_PointSize = 1.;
-    gl_Position = projectionMatrix * mvPosition;
-}
-`;
-
-export const simFragment = `
 varying vec2 vUv;
 uniform float uProgress;
 uniform int uRenderMode;
@@ -49,38 +37,3 @@ void main() {
 
     
 }
-`;
-
-export const vertexShader = `
-varying vec2 vUv;
-uniform float time;
-
-uniform sampler2D uTexture;
-
-void main() {
-
-    vUv = uv;
-    vec3 newpos = position;
-    vec4 color = texture2D( uTexture, vUv );
-    newpos.xyz = color.xyz;
-    // newpos.x += 1.;
-    // newpos.z += sin( time + position.x*10. ) * 0.5;
-
-    vec4 mvPosition = modelViewMatrix * vec4( newpos, 1.0 );
-
-    gl_PointSize =  5.*( 2.0 / -mvPosition.z );
-
-    gl_Position = projectionMatrix * mvPosition;
-
-}
-
-`;
-export const fragmentShader = `
-varying vec2 vUv;
-uniform sampler2D uTexture;
-void main() {
-    vec4 color = texture2D( uTexture, vUv );
-    gl_FragColor = vec4( 1.,1.,1., 1. );
-    // gl_FragColor = color;
-}
-`;

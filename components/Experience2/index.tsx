@@ -12,9 +12,11 @@ import {
 import { useScreen } from "@/hooks/useScreen";
 
 const Experience2 = () => {
-  const size = 6,
+  const size = 64,
     number = size * size;
+  const init = useRef(false);
   const { width, height } = useScreen();
+  const currentParticles = useRef(0);
   const dataFBO = useRef<THREE.DataTexture>(null!);
   const sceneFBO = useRef<THREE.Scene>(new THREE.Scene());
   const viewArea = size / 2 + 0.01;
@@ -31,6 +33,7 @@ const Experience2 = () => {
   cameraFBO.current.position.z = 1;
   cameraFBO.current.lookAt(new THREE.Vector3(0, 0, 0));
   const simMaterial = useRef<THREE.ShaderMaterial>(null!);
+  const simGeometry = useRef<THREE.BufferGeometry>(null!);
   const material = useRef<THREE.ShaderMaterial>(null!);
   const debugPlane = useRef<
     THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>
@@ -71,6 +74,24 @@ const Experience2 = () => {
     return { dataTexture };
   }, []);
 
+  const { positions, uvs } = useMemo(() => {
+    const positions = new Float32Array(number * 3);
+    const uvs = new Float32Array(number * 2);
+    for (let i = 0; i < size; i++) {
+      for (let j = 0; j < size; j++) {
+        const index = i * size + j;
+
+        positions[3 * index] = j / size - 0.5;
+        positions[3 * index + 1] = i / size - 0.5;
+        positions[3 * index + 2] = 0;
+        uvs[2 * index] = j / (size - 1);
+        uvs[2 * index + 1] = i / (size - 1);
+      }
+    }
+
+    return { positions, uvs };
+  }, []);
+
   const setUpFBO1 = () => {
     // create data Texture
     const data = new Float32Array(4 * number);
@@ -94,7 +115,7 @@ const Experience2 = () => {
     positions.needsUpdate = true;
 
     // create FBO scene
-    const geo = new THREE.BufferGeometry();
+    simGeometry.current = new THREE.BufferGeometry();
     const pos = new Float32Array(number * 3);
     const uv = new Float32Array(number * 2);
     for (let i = 0; i < size; i++) {
@@ -109,8 +130,11 @@ const Experience2 = () => {
         uv[2 * index + 1] = i / (size - 1);
       }
     }
-    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    simGeometry.current.setAttribute(
+      "position",
+      new THREE.BufferAttribute(pos, 3)
+    );
+    simGeometry.current.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
 
     simMaterial.current = new THREE.ShaderMaterial({
       uniforms: {
@@ -118,15 +142,16 @@ const Experience2 = () => {
         uMouse: { value: new THREE.Vector3(0, 0, 0) },
         uProgress: { value: 0 },
         uTime: { value: 0 },
+        uSource: { value: new THREE.Vector3(0, 0, 0) },
+        uRenderMode: { value: 0 },
+        uDirections: { value: null },
         uCurrentPosition: { value: getPointsOnSphere.dataTexture },
-        uOriginalPosition: { value: getPointsOnSphere.dataTexture },
-        uOriginalPosition1: { value: getPointsOnSphere.dataTexture },
       },
       vertexShader: simVertex,
       fragmentShader: simFragment,
     });
     simMaterial.current.needsUpdate = true;
-    const simMesh = new THREE.Points(geo, simMaterial.current);
+    const simMesh = new THREE.Points(simGeometry.current, simMaterial.current);
     sceneFBO.current.add(simMesh);
 
     return { positions };
@@ -136,40 +161,37 @@ const Experience2 = () => {
     dataFBO.current = setUpFBO1()?.positions;
   }, []);
 
-  const renderTargetA = useFBO(size, size, {
+  let renderTargetA = useFBO(size, size, {
     minFilter: THREE.NearestFilter,
     magFilter: THREE.NearestFilter,
     format: THREE.RGBAFormat,
     type: THREE.FloatType,
   });
-  const renderTargetB = useFBO(size, size, {
+
+  const directions = useFBO(size, size, {
     minFilter: THREE.NearestFilter,
     magFilter: THREE.NearestFilter,
     format: THREE.RGBAFormat,
     type: THREE.FloatType,
   });
-  const renderTargetRef = useRef({
-    current: renderTargetA,
-    next: renderTargetB,
+
+  const initPos = useFBO(size, size, {
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+    format: THREE.RGBAFormat,
+    type: THREE.FloatType,
   });
 
-  const { positions, uvs } = useMemo(() => {
-    const positions = new Float32Array(number * 3);
-    const uvs = new Float32Array(number * 2);
-    for (let i = 0; i < size; i++) {
-      for (let j = 0; j < size; j++) {
-        const index = i * size + j;
-
-        positions[3 * index] = j / size - 0.5;
-        positions[3 * index + 1] = i / size - 0.5;
-        positions[3 * index + 2] = 0;
-        uvs[2 * index] = j / (size - 1);
-        uvs[2 * index + 1] = i / (size - 1);
-      }
-    }
-
-    return { positions, uvs };
-  }, []);
+  let renderTargetB = useFBO(size, size, {
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+    format: THREE.RGBAFormat,
+    type: THREE.FloatType,
+  });
+  // const renderTargetRef = useRef({
+  //   current: renderTargetA,
+  //   next: renderTargetB,
+  // });
 
   useEffect(() => {
     const planeMesh = new THREE.Mesh(
@@ -206,28 +228,77 @@ const Experience2 = () => {
     const { clock, gl } = state;
     const elapsedTime = clock.getElapsedTime();
 
-    gl.setRenderTarget(renderTargetRef.current.current);
+    // Only run in the first frame
+    if (!init.current) {
+      init.current = true;
+
+      // DIRECTIONS
+      // this.simMaterial.uniforms.uRenderMode.value = 1;
+      // this.simMaterial.uniforms.uSource.value = new THREE.Vector3(0,-1.,0);
+      // this.renderer.setRenderTarget(this.directions);
+      // this.renderer.render(this.sceneFBO, this.cameraFBO)
+      // this.simMaterial.uniforms.uDirections.value = this.directions.texture;
+
+      // // INIT POSITIONS
+      simMaterial.current.uniforms.uRenderMode.value = 2;
+      simMaterial.current.uniforms.uSource.value = new THREE.Vector3(0, 0, 0);
+      gl.setRenderTarget(initPos);
+      gl.render(sceneFBO.current, cameraFBO.current);
+      simMaterial.current.uniforms.uCurrentPosition.value = initPos.texture;
+    }
+
+    // SIMULATION
+    simMaterial.current.uniforms.uDirections.value = directions.texture;
+    simMaterial.current.uniforms.uRenderMode.value = 0;
+    simGeometry.current.setDrawRange(0, number);
+    gl.setRenderTarget(renderTargetA);
     gl.render(sceneFBO.current, cameraFBO.current);
+
+    // EMITTER PARTICLES
+    const emit = 5;
+    simGeometry.current.setDrawRange(currentParticles.current, emit);
+    gl.autoClear = false;
+
+    // DIRECTIONS
+    simMaterial.current.uniforms.uRenderMode.value = 1;
+    simMaterial.current.uniforms.uDirections.value = null;
+    simMaterial.current.uniforms.uCurrentPosition.value = null;
+    simMaterial.current.uniforms.uSource.value = new THREE.Vector3(0, 1, 0);
+    gl.setRenderTarget(directions);
+    gl.render(sceneFBO.current, cameraFBO.current);
+    // INIT POSITIONS
+    simMaterial.current.uniforms.uRenderMode.value = 2;
+    simMaterial.current.uniforms.uSource.value = new THREE.Vector3(0, 0, 0);
+    gl.setRenderTarget(renderTargetA);
+    gl.render(sceneFBO.current, cameraFBO.current);
+    simMaterial.current.uniforms.uCurrentPosition.value = initPos.texture;
+
+    currentParticles.current += emit;
+    if (currentParticles.current > number) {
+      currentParticles.current = 0;
+    }
+    gl.autoClear = true;
+
+    // SWAP RENDER TARGETS
     gl.setRenderTarget(null);
     gl.render(scene, camera);
 
-    const temp = renderTargetRef.current.current;
-    renderTargetRef.current.current = renderTargetRef.current.next;
-    renderTargetRef.current.next = temp;
+    const temp = renderTargetA;
+    renderTargetA = renderTargetB;
+    renderTargetB = temp;
 
     if (material.current) {
       material.current.uniforms.time.value = elapsedTime;
-      material.current.uniforms.uTexture.value =
-        renderTargetRef.current.current.texture;
+      material.current.uniforms.uTexture.value = renderTargetA.texture;
     }
     if (simMaterial.current) {
       simMaterial.current.uniforms.uCurrentPosition.value =
-        renderTargetRef.current.next.texture;
+        renderTargetB.texture;
       simMaterial.current.uniforms.uTime.value = elapsedTime;
     }
 
     if (debugPlane.current) {
-      debugPlane.current.material.map = renderTargetRef.current.current.texture;
+      debugPlane.current.material.map = renderTargetA.texture;
     }
   });
 
