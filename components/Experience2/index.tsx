@@ -8,7 +8,6 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { useThree, useFrame } from "@react-three/fiber";
 import { lerp } from "three/src/math/MathUtils.js";
-import { useTexture } from "@react-three/drei";
 const Experience2 = () => {
   const size = 64;
   const number = size * size;
@@ -31,6 +30,9 @@ const Experience2 = () => {
   cameraFBO.current.position.z = 1;
   cameraFBO.current.lookAt(new THREE.Vector3(0, 0, 0));
   const debugPlane = useRef<THREE.Mesh>(null!);
+  const emitter = useRef<THREE.Mesh>(null!);
+  const emitterDir = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
+  const emitterPrevDir = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
 
   const getPointsOnSphere = () => {
     const data = new Float32Array(4 * number);
@@ -154,8 +156,8 @@ const Experience2 = () => {
     const simMesh = new THREE.Points(geometry.current, simMaterial.current);
     sceneFBO.current.add(simMesh);
   };
-  const positionsF = useRef<Float32Array>(new Float32Array(number * 3));
-  const uvsF = useRef<Float32Array>(new Float32Array(number * 2));
+  const positionsF = useRef<Float32Array>(null);
+  const uvsF = useRef<Float32Array>(null);
 
   useEffect(() => {
     setupFBO();
@@ -199,8 +201,17 @@ const Experience2 = () => {
         map: new THREE.TextureLoader().load("/img/threejs-logo.png"),
       })
     );
-    scene.add(debugPlane.current);
+    // scene.add(debugPlane.current);
+    emitter.current = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.1, 0.1),
+      new THREE.MeshBasicMaterial({
+        color: "red",
+      })
+    );
+    emitter.current.position.set(0, -0.5, 0);
+    scene.add(emitter.current);
   }, []);
+
   const init = useRef(false);
   const currentParticles = useRef(0);
 
@@ -211,23 +222,29 @@ const Experience2 = () => {
       init.current = true;
 
       // // DIRECTIONS
-      // this.simMaterial.uniforms.uRenderMode.value = 1;
-      // this.simMaterial.uniforms.uSource.value = new THREE.Vector3(0,-1.,0);
-      // this.renderer.setRenderTarget(this.directions);
-      // this.renderer.render(this.sceneFBO, this.cameraFBO)
-      // this.simMaterial.uniforms.uDirections.value = this.directions.texture;
+      // simMaterial.current.uniforms.uRenderMode.value = 1;
+      // simMaterial.current.uniforms.uSource.value = new THREE.Vector3(0, 1, 0);
+      // state.gl.setRenderTarget(directions);
+      // state.gl.render(sceneFBO.current, cameraFBO.current);
+      // simMaterial.current.uniforms.uDirections.value = directions.texture;
 
-      // // POSITIONS
+      // POSITIONS
       simMaterial.current.uniforms.uRenderMode.value = 2;
-      simMaterial.current.uniforms.uSource.value = new THREE.Vector3(0, 0, 0);
+      simMaterial.current.uniforms.uSource.value = new THREE.Vector3(
+        0,
+        -0.5,
+        0
+      );
       state.gl.setRenderTarget(initPos);
       state.gl.render(sceneFBO.current, cameraFBO.current);
       simMaterial.current.uniforms.uCurrentPosition.value = initPos.texture;
     }
 
-    // this.material.uniforms.time.value = this.time;
+    if (emitter.current) {
+      emitter.current.position.x = Math.sin(elapsedTime * 2) * 0.5;
+    }
 
-    // SIMULATION
+    // SIMULATION FOR REAL RENDERING
     simMaterial.current.uniforms.uDirections.value = directions.texture;
     simMaterial.current.uniforms.uRenderMode.value = 0;
     geometry.current.setDrawRange(0, number);
@@ -236,31 +253,34 @@ const Experience2 = () => {
 
     // BEGIN EMITTER
     const emit = 5;
+    emitterDir.current = emitter.current.position
+      .clone()
+      .sub(emitterPrevDir.current)
+      .multiplyScalar(100);
     geometry.current.setDrawRange(currentParticles.current, emit);
     state.gl.autoClear = false;
 
     // DIRECTIONS
     simMaterial.current.uniforms.uRenderMode.value = 1;
     simMaterial.current.uniforms.uDirections.value = null;
-    simMaterial.current.uniforms.uCurrentPosition.value = null;
-    simMaterial.current.uniforms.uSource.value = new THREE.Vector3(0, 1, 0);
+    simMaterial.current.uniforms.uSource.value = emitterDir.current;
     state.gl.setRenderTarget(directions);
     state.gl.render(sceneFBO.current, cameraFBO.current);
 
     // POSITIONS
     simMaterial.current.uniforms.uRenderMode.value = 2;
-    simMaterial.current.uniforms.uSource.value = new THREE.Vector3(0, 0, 0);
+    simMaterial.current.uniforms.uCurrentPosition.value = null;
+    simMaterial.current.uniforms.uSource.value = emitter.current.position;
     state.gl.setRenderTarget(renderTarget);
     state.gl.render(sceneFBO.current, cameraFBO.current);
-    simMaterial.current.uniforms.uCurrentPosition.value = initPos.texture;
 
     currentParticles.current += emit;
     if (currentParticles.current > number) {
       currentParticles.current = 0;
     }
     state.gl.autoClear = true;
-
-    // END OF EMIITER
+    emitterPrevDir.current = emitter.current.position.clone();
+    // // END OF EMIITER
 
     // RENDER SCENE
     state.gl.setRenderTarget(null);
