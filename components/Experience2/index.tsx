@@ -11,9 +11,10 @@ import { lerp } from "three/src/math/MathUtils.js";
 const Experience2 = () => {
   const size = 64;
   const number = size * size;
-  const geometry = useRef<THREE.BufferGeometry>(new THREE.BufferGeometry());
-  const material = useRef<THREE.ShaderMaterial>(null);
-  const simMaterial = useRef<THREE.ShaderMaterial>(null);
+  const simGeometry = useRef<THREE.BufferGeometry>(null!);
+  const simMaterial = useRef<THREE.ShaderMaterial>(null!);
+  const geometry = useRef<THREE.BufferGeometry>(null!);
+  const material = useRef<THREE.ShaderMaterial>(null!);
   const { scene } = useThree();
   const sceneFBO = useRef<THREE.Scene>(new THREE.Scene());
   const viewArea = size / 2 + 0.01;
@@ -95,28 +96,7 @@ const Experience2 = () => {
   });
 
   const setupFBO = () => {
-    // create data Texture
-    const data = new Float32Array(4 * number);
-    for (let i = 0; i < size; i++) {
-      for (let j = 0; j < size; j++) {
-        const index = i * size + j;
-        data[4 * index] = lerp(-0.5, 0.5, j / (size - 1));
-        data[4 * index + 1] = lerp(-0.5, 0.5, i / (size - 1));
-        data[4 * index + 2] = 0;
-        data[4 * index + 3] = 1;
-      }
-    }
-
-    const positions = new THREE.DataTexture(
-      data,
-      size,
-      size,
-      THREE.RGBAFormat,
-      THREE.FloatType
-    );
-    positions.needsUpdate = true;
-
-    geometry.current = new THREE.BufferGeometry();
+    simGeometry.current = new THREE.BufferGeometry();
     const pos = new Float32Array(number * 3);
     const uv = new Float32Array(number * 2);
     for (let i = 0; i < size; i++) {
@@ -131,17 +111,16 @@ const Experience2 = () => {
         uv[2 * index + 1] = i / (size - 1);
       }
     }
-    geometry.current.setAttribute(
+    simGeometry.current.setAttribute(
       "position",
       new THREE.BufferAttribute(pos, 3)
     );
-    geometry.current.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    simGeometry.current.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
 
     // this.geo.setDrawRange(3, 10);
 
     simMaterial.current = new THREE.ShaderMaterial({
       uniforms: {
-        time: { value: 0 },
         uMouse: { value: new THREE.Vector3(0, 0, 0) },
         uProgress: { value: 0 },
         uTime: { value: 0 },
@@ -153,11 +132,9 @@ const Experience2 = () => {
       vertexShader: simVertex,
       fragmentShader: simFragment,
     });
-    const simMesh = new THREE.Points(geometry.current, simMaterial.current);
+    const simMesh = new THREE.Points(simGeometry.current, simMaterial.current);
     sceneFBO.current.add(simMesh);
   };
-  const positionsF = useRef<Float32Array>(null);
-  const uvsF = useRef<Float32Array>(null);
 
   useEffect(() => {
     setupFBO();
@@ -174,11 +151,12 @@ const Experience2 = () => {
         uvs[2 * index + 1] = i / (size - 1);
       }
     }
-    positionsF.current = positions;
-    uvsF.current = uvs;
-    const test = new THREE.BufferGeometry();
-    test.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    test.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+    geometry.current = new THREE.BufferGeometry();
+    geometry.current.setAttribute(
+      "position",
+      new THREE.BufferAttribute(positions, 3)
+    );
+    geometry.current.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
 
     material.current = new THREE.ShaderMaterial({
       uniforms: {
@@ -192,16 +170,16 @@ const Experience2 = () => {
       transparent: true,
     });
 
-    const mesh = new THREE.Points(test, material.current);
+    const mesh = new THREE.Points(geometry.current, material.current);
     scene.add(mesh);
 
     debugPlane.current = new THREE.Mesh(
-      new THREE.PlaneGeometry(1, 1, 1, 1),
+      new THREE.PlaneGeometry(0.4, 0.4, 1, 1),
       new THREE.MeshBasicMaterial({
         map: new THREE.TextureLoader().load("/img/threejs-logo.png"),
       })
     );
-    // scene.add(debugPlane.current);
+    scene.add(debugPlane.current);
     emitter.current = new THREE.Mesh(
       new THREE.BoxGeometry(0.1, 0.1, 0.1),
       new THREE.MeshBasicMaterial({
@@ -229,15 +207,15 @@ const Experience2 = () => {
       // simMaterial.current.uniforms.uDirections.value = directions.texture;
 
       // POSITIONS
-      simMaterial.current.uniforms.uRenderMode.value = 2;
-      simMaterial.current.uniforms.uSource.value = new THREE.Vector3(
-        0,
-        -0.5,
-        0
-      );
-      state.gl.setRenderTarget(initPos);
-      state.gl.render(sceneFBO.current, cameraFBO.current);
-      simMaterial.current.uniforms.uCurrentPosition.value = initPos.texture;
+      // simMaterial.current.uniforms.uRenderMode.value = 2;
+      // simMaterial.current.uniforms.uSource.value = new THREE.Vector3(
+      //   0,
+      //   -0.5,
+      //   0
+      // );
+      // state.gl.setRenderTarget(initPos);
+      // state.gl.render(sceneFBO.current, cameraFBO.current);
+      // simMaterial.current.uniforms.uCurrentPosition.value = initPos.texture;
     }
 
     if (emitter.current) {
@@ -247,7 +225,7 @@ const Experience2 = () => {
     // SIMULATION FOR REAL RENDERING
     simMaterial.current.uniforms.uDirections.value = directions.texture;
     simMaterial.current.uniforms.uRenderMode.value = 0;
-    geometry.current.setDrawRange(0, number);
+    simGeometry.current.setDrawRange(0, number);
     state.gl.setRenderTarget(renderTarget);
     state.gl.render(sceneFBO.current, cameraFBO.current);
 
@@ -257,7 +235,7 @@ const Experience2 = () => {
       .clone()
       .sub(emitterPrevDir.current)
       .multiplyScalar(100);
-    geometry.current.setDrawRange(currentParticles.current, emit);
+    simGeometry.current.setDrawRange(currentParticles.current, emit);
     state.gl.autoClear = false;
 
     // DIRECTIONS
