@@ -31,7 +31,7 @@ void main() {
     if(uRenderMode==0){
         float life = 1. - clamp((uTime - direction.a)/15., 0., 1.);
         float speedLife = clamp(life, 0.1, 1.);
-        position.xyz += speedLife * direction.xyz * 0.01 + vec3(0., -1., -5.)*0.001;
+        position.xyz += speedLife * direction.xyz * 0.01 + vec3(0., -1., -10.)*0.001;
         gl_FragColor = vec4( position, life);
     }
 

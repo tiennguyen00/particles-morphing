@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+// @ts-nocheck
 import {
   fragmentShader,
   simFragment,
@@ -8,6 +10,8 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { useThree, useFrame } from "@react-three/fiber";
 import { lerp } from "three/src/math/MathUtils.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+
 const Experience2 = () => {
   const size = 64;
   const number = size * size;
@@ -34,6 +38,12 @@ const Experience2 = () => {
   const emitter = useRef<THREE.Mesh>(null!);
   const emitterDir = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
   const emitterPrevDir = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
+
+  const loader = new GLTFLoader();
+  const birdModel = useRef<THREE.Group>(null!);
+  const mixer = useRef<THREE.AnimationMixer>(null!);
+  const emitters = useRef<any>([]);
+  const v = useRef(new THREE.Vector3(0, 0, 0));
 
   const getPointsOnSphere = () => {
     const data = new Float32Array(4 * number);
@@ -138,6 +148,26 @@ const Experience2 = () => {
 
   useEffect(() => {
     setupFBO();
+    loader.load("/models/bird.glb", (gltf) => {
+      birdModel.current = gltf.scene;
+
+      birdModel.current.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.name.includes("emitter")) {
+          emitters.current.push({
+            mesh: child,
+            prevPos: child.position.clone(),
+            dir: new THREE.Vector3(0, 0, 0),
+          });
+          child.material = new THREE.MeshBasicMaterial({
+            color: "red",
+          });
+        }
+      });
+      scene.add(birdModel.current);
+      mixer.current = new THREE.AnimationMixer(birdModel.current);
+      const action = mixer.current.clipAction(gltf.animations[0]);
+      action.play();
+    });
 
     const positions = new Float32Array(number * 3);
     const uvs = new Float32Array(number * 2);
@@ -193,7 +223,7 @@ const Experience2 = () => {
   const init = useRef(false);
   const currentParticles = useRef(0);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const elapsedTime = state.clock.elapsedTime;
     if (!simMaterial.current) return;
     if (!init.current) {
@@ -231,33 +261,40 @@ const Experience2 = () => {
 
     // BEGIN EMITTER
     const emit = 5;
-    emitterDir.current = emitter.current.position
-      .clone()
-      .sub(emitterPrevDir.current)
-      .multiplyScalar(100);
-    simGeometry.current.setDrawRange(currentParticles.current, emit);
     state.gl.autoClear = false;
 
-    // DIRECTIONS
-    simMaterial.current.uniforms.uRenderMode.value = 1;
-    simMaterial.current.uniforms.uDirections.value = null;
-    simMaterial.current.uniforms.uSource.value = emitterDir.current;
-    state.gl.setRenderTarget(directions);
-    state.gl.render(sceneFBO.current, cameraFBO.current);
+    emitters.current.forEach((_emitter) => {
+      // copy the global position of the emitter.mesh into the v.current vector
+      _emitter.mesh.getWorldPosition(v.current);
 
-    // POSITIONS
-    simMaterial.current.uniforms.uRenderMode.value = 2;
-    simMaterial.current.uniforms.uCurrentPosition.value = null;
-    simMaterial.current.uniforms.uSource.value = emitter.current.position;
-    state.gl.setRenderTarget(renderTarget);
-    state.gl.render(sceneFBO.current, cameraFBO.current);
+      _emitter.dir = v.current
+        .clone()
+        .sub(_emitter.prevPos)
+        .multiplyScalar(100);
+      simGeometry.current.setDrawRange(currentParticles.current, emit);
 
-    currentParticles.current += emit;
-    if (currentParticles.current > number) {
-      currentParticles.current = 0;
-    }
+      // DIRECTIONS
+      simMaterial.current.uniforms.uRenderMode.value = 1;
+      simMaterial.current.uniforms.uDirections.value = null;
+      simMaterial.current.uniforms.uSource.value = _emitter.dir;
+      state.gl.setRenderTarget(directions);
+      state.gl.render(sceneFBO.current, cameraFBO.current);
+
+      // POSITIONS
+      simMaterial.current.uniforms.uRenderMode.value = 2;
+      simMaterial.current.uniforms.uCurrentPosition.value = null;
+      simMaterial.current.uniforms.uSource.value = v.current;
+      state.gl.setRenderTarget(renderTarget);
+      state.gl.render(sceneFBO.current, cameraFBO.current);
+
+      currentParticles.current += emit;
+      if (currentParticles.current > number) {
+        currentParticles.current = 0;
+      }
+      _emitter.prevPos = v.current.clone();
+    });
+
     state.gl.autoClear = true;
-    emitterPrevDir.current = emitter.current.position.clone();
     // // END OF EMIITER
 
     // RENDER SCENE
@@ -274,6 +311,10 @@ const Experience2 = () => {
     simMaterial.current.uniforms.uTime.value = elapsedTime;
 
     debugPlane.current.material.map = renderTarget.texture;
+
+    if (mixer.current) {
+      mixer.current.update(delta);
+    }
   });
   return (
     <>
