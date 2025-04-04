@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+// @ts-nocheck
 import { shaderMaterial } from "@react-three/drei";
 import { extend } from "@react-three/fiber";
 import { vertexShader, fragmentShader } from "./index";

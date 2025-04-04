@@ -74,6 +74,9 @@ const Experience = () => {
         });
       }
     });
+
+    scene1.rotation.x = -Math.PI / 16;
+
     mixer.clipAction(clips[0]).play();
     mixer.timeScale = 0.5;
   }, []);
@@ -108,6 +111,11 @@ const Experience = () => {
 
   useFrame((state, delta) => {
     const elapsedTime = state.clock.elapsedTime;
+
+    if (scene1) {
+      scene1.position.y = Math.sin(elapsedTime * 12) * 0.18;
+    }
+
     if (!simMaterial.current || !simGeometry.current) return;
     if (!init.current) {
       init.current = true;

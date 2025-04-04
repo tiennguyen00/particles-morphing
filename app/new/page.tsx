@@ -4,6 +4,7 @@
 import Experience from "@/components/Experience2";
 import { OrbitControls, StatsGl } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
+import Horse from "@/components/Experience2/Horse";
 
 export default function Home() {
   return (
@@ -21,6 +22,8 @@ export default function Home() {
       {/* <StatsGl className="top-0 left-0 fixed" trackGPU /> */}
       <OrbitControls />
       <Experience />
+
+      <Horse />
     </Canvas>
   );
 }
