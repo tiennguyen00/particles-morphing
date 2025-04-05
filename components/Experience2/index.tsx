@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useFBO, useGLTF, useAnimations } from "@react-three/drei";
 import { useFrame, useThree, createPortal } from "@react-three/fiber";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import {
   fragmentShader,
   simFragment,
@@ -19,7 +20,11 @@ import "./shaders/SimMaterial";
 const size = 512,
   number = size * size;
 
-const Experience = () => {
+const Experience = ({
+  cubePos,
+}: {
+  cubePos: React.MutableRefObject<THREE.Vector3>;
+}) => {
   const { width, height } = useScreen();
 
   const { scene, camera, pointer } = useThree();
@@ -75,10 +80,10 @@ const Experience = () => {
       }
     });
 
-    scene1.rotation.x = -Math.PI / 16;
+    scene1.rotation.x = -Math.PI / 10;
 
     mixer.clipAction(clips[0]).play();
-    mixer.timeScale = 0.5;
+    // mixer.timeScale = 0.5;
   }, []);
 
   let renderTarget = useFBO(size, size, {
@@ -113,7 +118,7 @@ const Experience = () => {
     const elapsedTime = state.clock.elapsedTime;
 
     if (scene1) {
-      scene1.position.y = Math.sin(elapsedTime * 12) * 0.18;
+      scene1.position.copy(cubePos.current).multiplyScalar(1.5);
     }
 
     if (!simMaterial.current || !simGeometry.current) return;
@@ -238,6 +243,14 @@ const Experience = () => {
 
   return (
     <>
+      <EffectComposer>
+        <Bloom
+          intensity={1.5}
+          luminanceThreshold={0.1}
+          luminanceSmoothing={0.9}
+          mipmapBlur
+        />
+      </EffectComposer>
       <primitive object={scene1} />
       {createPortal(
         <points>
