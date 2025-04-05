@@ -10,7 +10,6 @@ const HorseMaterial = shaderMaterial(
     uPositions: { value: null },
     uSize: { value: 2 },
     uTime: { value: 0 },
-    uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
     uScroll: { value: 0 },
   },
   horseVertexShader,

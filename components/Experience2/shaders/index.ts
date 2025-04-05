@@ -96,7 +96,6 @@ attribute vec3 aE2Geometry;
 uniform sampler2D uPositions;//RenderTarget containing the transformed positions
 uniform float uSize;
 uniform float uTime;
-uniform float uPixelRatio;
 varying vec3 vPos;
 varying vec2 vUv;
 
