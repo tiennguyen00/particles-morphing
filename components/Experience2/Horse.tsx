@@ -59,19 +59,6 @@ const Horse = ({
   useFrame((_, delta) => {
     if (mixer) {
       mixer.update(delta);
-      // Manually update point morphs from the original mesh if needed
-      if (refPoints.current && scene1.children.length > 0) {
-        const childMesh = scene1.children[0];
-        if (
-          childMesh.morphTargetInfluences &&
-          refPoints.current.morphTargetInfluences
-        ) {
-          for (let i = 0; i < childMesh.morphTargetInfluences.length; i++) {
-            refPoints.current.morphTargetInfluences[i] =
-              childMesh.morphTargetInfluences[i];
-          }
-        }
-      }
     }
   });
 
